@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP Interactive Reservation Portal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            500: '#10b981', // Emerald Primary
+                            600: '#059669',
+                            900: '#064e3b',
+                        },
+                        neon: {
+                            pink: '#ec4899',
+                            cyan: '#06b6d4',
+                            violet: '#8b5cf6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Paystack Inline SDK -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #030712; color: #f9fafb; overflow-x: hidden; }
+        .glass-panel { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-card { background: rgba(31, 41, 55, 0.5); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .glow-emerald { box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.3); }
+        .glow-pink { box-shadow: 0 0 30px -5px rgba(236, 72, 153, 0.3); }
+        .gradient-text { background: linear-gradient(135deg, #10b981 0%, #06b6d4 50%, #ec4899 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-3 sm:p-6 relative">
+
+    <!-- Background WebGL/Canvas Particle Mesh -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Main Interactive Container -->
+    <main class="max-w-5xl w-full glass-panel rounded-3xl p-4 sm:p-8 relative z-10 shadow-2xl border border-white/10 my-6">
+        
+        <!-- Header & Industry Switcher -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-gray-800">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5"></span> Verified Portal
+                    </span>
+                    <span id="target-industry-tag" class="text-xs text-gray-400 uppercase tracking-widest font-mono">Bespoke Real Estate</span>
+                </div>
+                <h1 id="portal-title" class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+                    Luxury Unit <span class="gradient-text">Reservation Portal</span>
+                </h1>
+            </div>
+
+            <!-- Dynamic Demo Switcher (For Client Live Pitching) -->
+            <div class="glass-card p-1.5 rounded-xl flex items-center gap-1 border border-white/5">
+                <button onclick="switchPreset('realestate')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Real Estate</button>
+                <button onclick="switchPreset('builder')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all text-gray-400 hover:text-white">US Builder</button>
+                <button onclick="switchPreset('agency')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all text-gray-400 hover:text-white">Agency/B2B</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
+            
+            <!-- LEFT COLUMN: 3D Visualizer & Dynamic Calculation (7 Cols) -->
+            <section class="lg:col-span-7 flex flex-col justify-between space-y-6">
+                
+                <!-- Interactive Preview Frame -->
+                <div class="relative w-full h-64 sm:h-80 rounded-2xl overflow-hidden glass-card group border border-white/10">
+                    <img id="preview-image" src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80" 
+                         alt="Asset Preview" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80">
+                    <div class="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent"></div>
+                    
+                    <div class="absolute top-4 left-4 flex items-center gap-2">
+                        <span class="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono text-emerald-400 border border-white/10">
+                            3D Interactive View Active
+                        </span>
+                    </div>
+
+                    <div class="absolute bottom-4 left-4 right-4">
+                        <p id="preview-subtitle" class="text-xs text-emerald-400 font-mono uppercase tracking-wider mb-1">Featured Allocation</p>
+                        <h3 id="preview-title" class="text-xl font-bold text-white">Waterfront Duplex Suite — Penthouse Tier</h3>
+                    </div>
+                </div>
+
+                <!-- Dynamic Scope & Feature Selectors -->
+                <div class="space-y-4">
+                    <label class="block text-xs font-mono uppercase text-gray-400 tracking-wider">Select Allocation Scope</label>
+                    <div class="grid grid-cols-3 gap-3" id="tier-selector-container">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Live Pricing Breakdown Card -->
+                <div class="glass-card p-5 rounded-2xl border border-emerald-500/20 glow-emerald flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Required Commitment Deposit</span>
+                        <div class="text-3xl font-extrabold text-emerald-400 mt-1" id="calculated-price">₦1,500,000</div>
+                        <span class="text-[11px] text-gray-500">50% Lock Deposit • Balance upon deployment/handover</span>
+                    </div>
+                    <i data-lucide="shield-check" class="w-10 h-10 text-emerald-400/80"></i>
+                </div>
+
+            </section>
+
+            <!-- RIGHT COLUMN: High-Converting Checkout Engine (5 Cols) -->
+            <section class="lg:col-span-5 glass-card p-6 rounded-2xl border border-white/10 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                        <i data-lucide="lock" class="w-4 h-4 text-emerald-400"></i> Instant Deposit Lock
+                    </h2>
+                    <p class="text-xs text-gray-400 mb-6">Enter details below to lock your slot directly into the payment gateway.</p>
+
+                    <form id="checkoutForm" onsubmit="executeCheckout(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-mono text-gray-400 mb-1">Full Legal Name / Entity</label>
+                            <input type="text" id="client-name" required placeholder="e.g. Victor Patrick" 
+                                   class="w-full bg-gray-950/80 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-mono text-gray-400 mb-1">Direct Contact Email</label>
+                            <input type="email" id="client-email" required placeholder="client@company.com" 
+                                   class="w-full bg-gray-950/80 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-mono text-gray-400 mb-1">Phone / WhatsApp</label>
+                            <input type="tel" id="client-phone" required placeholder="+234..." 
+                                   class="w-full bg-gray-950/80 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="submit" id="pay-button" 
+                                    class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-extrabold py-4 px-6 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2">
+                                <span id="button-label">Lock Deposit Now</span>
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-gray-800 text-center">
+                    <div class="flex items-center justify-center gap-4 text-xs text-gray-500">
+                        <span class="flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i> Instant Receipt</span>
+                        <span class="flex items-center gap-1"><i data-lucide="globe" class="w-3.5 h-3.5 text-cyan-400"></i> USD/NGN/Crypto</span>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Master Application Controller JavaScript -->
+    <script>
+        // Preset Industry Configurations
+        const presets = {
+            realestate: {
+                tag: 'Luxury Real Estate',
+                title: 'Off-Plan Luxury <span class="gradient-text">Deposit Engine</span>',
+                img: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80',
+                previewTitle: 'Waterfront Duplex Suite — Lekki Phase 1',
+                previewSub: 'Off-Plan Allocation',
+                currency: 'NGN',
+                symbol: '₦',
+                tiers: [
+                    { name: '1-Bed Unit', price: 500000 },
+                    { name: '3-Bed Duplex', price: 1500000, active: true },
+                    { name: 'Penthouse', price: 3000000 }
+                ]
+            },
+            builder: {
+                tag: 'US Custom Builders',
+                title: 'Custom Home <span class="gradient-text">Estimation Engine</span>',
+                img: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1200&q=80',
+                previewTitle: 'Custom Build Consultation — Tyler, TX',
+                previewSub: 'Project Scope Estimation',
+                currency: 'USD',
+                symbol: '$',
+                tiers: [
+                    { name: 'Remodel Scope', price: 750 },
+                    { name: 'Custom Build', price: 1500, active: true },
+                    { name: 'Estate Package', price: 3000 }
+                ]
+            },
+            agency: {
+                tag: 'B2B Digital Studio',
+                title: 'Instant Service <span class="gradient-text">Retainer Engine</span>',
+                img: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80',
+                previewTitle: 'White-Label Web App & AI Systems Sprint',
+                previewSub: '24-Hour Delivery Sprint',
+                currency: 'USD',
+                symbol: '$',
+                tiers: [
+                    { name: 'MVP Sprint', price: 1000 },
+                    { name: 'Full Web App', price: 2000, active: true },
+                    { name: 'Scale Engine', price: 3500 }
+                ]
+            }
+        };
+
+        let currentPreset = presets.realestate;
+        let selectedAmount = 1500000;
+
+        function renderTiers() {
+            const container = document.getElementById('tier-selector-container');
+            container.innerHTML = '';
+            
+            currentPreset.tiers.forEach((tier, index) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                const isActive = tier.price === selectedAmount;
+                
+                btn.className = `p-3 rounded-xl border text-left transition-all ${
+                    isActive 
+                    ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg shadow-emerald-500/10' 
+                    : 'bg-gray-950/60 border-gray-800 text-gray-400 hover:border-gray-700'
+                }`;
+                
+                btn.onclick = () => {
+                    selectedAmount = tier.price;
+                    renderTiers();
+                    updatePriceDisplay();
+                };
+
+                btn.innerHTML = `
+                    <div class="text-[10px] font-mono uppercase text-gray-400">Tier 0${index + 1}</div>
+                    <div class="text-xs font-bold text-white mt-0.5">${tier.name}</div>
+                    <div class="text-xs font-mono text-emerald-400 mt-1">${currentPreset.symbol}${tier.price.toLocaleString()}</div>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        function updatePriceDisplay() {
+            document.getElementById('calculated-price').innerText = `${currentPreset.symbol}${selectedAmount.toLocaleString()}`;
+        }
+
+        function switchPreset(key) {
+            currentPreset = presets[key];
+            selectedAmount = currentPreset.tiers.find(t => t.active)?.price || currentPreset.tiers[0].price;
+            
+            document.getElementById('target-industry-tag').innerText = currentPreset.tag;
+            document.getElementById('portal-title').innerHTML = currentPreset.title;
+            document.getElementById('preview-image').src = currentPreset.img;
+            document.getElementById('preview-title').innerText = currentPreset.previewTitle;
+            document.getElementById('preview-subtitle').innerText = currentPreset.previewSub;
+            
+            renderTiers();
+            updatePriceDisplay();
+        }
+
+        function executeCheckout(e) {
+            e.preventDefault();
+            const email = document.getElementById('client-email').value;
+            const name = document.getElementById('client-name').value;
+            
+            // Paystack Inline Modal Configuration
+            let handler = PaystackPop.setup({
+                key: 'pk_test_PUBLIC_KEY_HERE', // Replace with your live or test key
+                email: email,
+                amount: currentPreset.currency === 'NGN' ? selectedAmount * 100 : selectedAmount * 100 * 1500, // Converts USD to kobo if needed
+                currency: "NGN",
+                ref: 'VIP_' + Math.floor((Math.random() * 1000000000) + 1),
+                metadata: {
+                    custom_fields: [
+                        { display_name: "Client Name", variable_name: "client_name", value: name }
+                    ]
+                },
+                onClose: function(){
+                    alert('Reservation process paused.');
+                },
+                callback: function(response){
+                    alert('Reservation Payment Successful! Transaction Ref: ' + response.reference);
+                }
+            });
+            handler.openIframe();
+        }
+
+        // Particle Canvas Background
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        for(let i=0; i<40; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 1.5 + 0.5,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4
+            });
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
+            
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // Initialize Lucide icons & default view
+        lucide.createIcons();
+        switchPreset('realestate');
+    </script>
+</body>
+</html>
